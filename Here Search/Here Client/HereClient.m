@@ -13,7 +13,8 @@
 @interface HereClient() <NSURLSessionDelegate>
 
 @property (nonatomic) NSURLSession *session;
-@property (nonatomic, copy) NSString *encodedClientCredentials;
+@property (nonatomic, copy) NSString *appID;
+@property (nonatomic, copy) NSString *appCode;
 
 @end
 
@@ -25,8 +26,8 @@
     if (self) {
         NSURLSessionConfiguration *sessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
         _session = [NSURLSession sessionWithConfiguration:sessionConfiguration delegate:self delegateQueue:nil];
-        NSString *clientCredentials = [NSString stringWithFormat:@"%@:%@", appID, appCode];
-        _encodedClientCredentials = [[clientCredentials dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0];
+        _appID = appID;
+        _appCode = appCode;
     }
     
     return self;
@@ -37,7 +38,24 @@
     [self.session invalidateAndCancel];
 }
 
-- (void)URLSession:(NSURLSession *)session didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
+- (NSMutableURLRequest *)authenticatedRequestForRequest:(NSMutableURLRequest *)request useHTTPHeaders:(BOOL)useHTTPHeaders
+{
+    if (useHTTPHeaders) {
+        NSString *clientCredentials = [NSString stringWithFormat:@"%@:%@", self.appID, self.appCode];
+        NSString *encodedClientCredentials = [[clientCredentials dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0];
+        NSString *basicHeader = [NSString stringWithFormat:@"Basic %@", encodedClientCredentials];
+        [request setValue:basicHeader forHTTPHeaderField:@"Authorization"];
+    } else {
+        NSString *authentication = [NSString stringWithFormat:@"&app_id=%@&app_code=%@", self.appID, self.appCode];
+        NSString *url = [request.URL.absoluteString stringByAppendingString:authentication];
+        request.URL = [NSURL URLWithString:url];
+    }
+    
+    return request;
+}
+
+- (void)URLSession:(NSURLSession *)session didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler
+{
     NSURLSessionAuthChallengeDisposition disposition = self.allowsAnyHTTPSCertificate ? NSURLSessionAuthChallengeUseCredential : NSURLSessionAuthChallengePerformDefaultHandling;
     completionHandler(disposition, [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust]);
 }
@@ -45,7 +63,7 @@
 - (NSURLSessionDataTask *)retrieveSearchResultsWithCoordinate:(CLLocationCoordinate2D)coordinate query:(NSString *)query completionHandler:(void (^)(NSArray *locationItems, NSError *error))completionHandler
 {
     NSMutableURLRequest *request = [HereClientParsing searchRequestForCoordinate:coordinate query:query];
-    request = [self authenticatedRequestForRequest:request];
+    request = [self authenticatedRequestForRequest:request useHTTPHeaders:YES];
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         NSArray *locationItems = error ? nil : [HereClientParsing locationItemsForData:data];
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -57,12 +75,19 @@
     return task;
 }
 
-- (NSMutableURLRequest *)authenticatedRequestForRequest:(NSMutableURLRequest *)request
+- (NSURLSessionDataTask *)retrieveRouteWithLocationItems:(NSArray *)locationItems completionHandler:(void (^)(MKPolyline *polyline, NSError *error))completionHandler
 {
-    NSString *basicHeader = [NSString stringWithFormat:@"Basic %@", self.encodedClientCredentials];
-    [request setValue:basicHeader forHTTPHeaderField:@"Authorization"];
-
-    return request;
+    NSMutableURLRequest *request = [HereClientParsing routeRequestForLocationItems:locationItems];
+    request = [self authenticatedRequestForRequest:request useHTTPHeaders:NO];
+    NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        MKPolyline *polyline = error ? nil : [HereClientParsing shapeForData:data];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completionHandler(polyline, error);
+        });
+    }];
+    [task resume];
+    
+    return task;
 }
 
 @end

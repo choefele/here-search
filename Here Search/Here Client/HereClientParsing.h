@@ -13,5 +13,8 @@
 
 + (NSMutableURLRequest *)searchRequestForCoordinate:(CLLocationCoordinate2D)coordinate query:(NSString *)query;
 + (NSArray *)locationItemsForData:(NSData *)data;
++ (NSMutableURLRequest *)routeRequestForLocationItems:(NSArray *)locationItems;
++ (MKPolyline *)shapeForData:(NSData *)data;
++ (NSArray *)waypointsForData:(NSData *)data;
 
 @end

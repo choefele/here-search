@@ -9,12 +9,15 @@
 #import "MapViewController.h"
 
 #import "ItineraryModel.h"
+#import "HereClient.h"
 
-#import <MapKit/MapKit.h>
+static NSString *APP_ID = @"DemoAppId01082013GAL";
+static NSString *APP_CODE = @"AJKnXv84fjrb0KIHawS0Tg";
 
 @interface MapViewController ()<MKMapViewDelegate>
 
 @property (weak, nonatomic) IBOutlet MKMapView *mapView;
+@property (nonatomic) HereClient *hereClient;
 
 @end
 
@@ -23,16 +26,22 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    
+    self.hereClient = [[HereClient alloc] initWithAppID:APP_ID appCode:APP_CODE];
 }
 
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-
+    
     [self.mapView removeAnnotations:self.mapView.annotations];
     [self.mapView addAnnotations:self.itineraryModel.locationItems];
     [self.mapView removeOverlays:self.mapView.overlays];
-    [self.mapView addOverlay:self.itineraryModel.polyline];
+    [self.hereClient retrieveRouteWithLocationItems:self.itineraryModel.locationItems completionHandler:^(MKPolyline *polyline, NSError *error) {
+        if (polyline) {
+            [self.mapView addOverlay:polyline];
+        }
+    }];
 }
 
 - (void)viewDidAppear:(BOOL)animated

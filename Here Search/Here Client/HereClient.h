@@ -16,5 +16,6 @@
 - (instancetype)initWithAppID:(NSString *)appID appCode:(NSString *)appCode NS_DESIGNATED_INITIALIZER;
 
 - (NSURLSessionDataTask *)retrieveSearchResultsWithCoordinate:(CLLocationCoordinate2D)coordinate query:(NSString *)query completionHandler:(void (^)(NSArray *locationItems, NSError *error))completionHandler;
+- (NSURLSessionDataTask *)retrieveRouteWithLocationItems:(NSArray *)locationItems completionHandler:(void (^)(MKPolyline *polyline, NSError *error))completionHandler;
 
 @end
